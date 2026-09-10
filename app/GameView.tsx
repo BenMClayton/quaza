@@ -1,72 +1,1309 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
-import {ArrowDown,ArrowUpRight,Backpack,BookOpen,Boxes,Check,ChevronRight,Compass,Flame,Globe2,Hammer,Heart,Leaf,Lock,Minus,Orbit,Pause,Pickaxe,Play,Plus,RotateCw,Settings2,Shield,Shovel,Sparkles,Sun,TreePine,Wheat,Zap} from 'lucide-react';
-import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
-import {Tabs,TabsList,TabsTrigger,TabsContent} from '@/components/ui/tabs';
-import {Game,HOTBAR,ITEMS,BUILDS,TECHS,MINERALS,REFINING,SIZE,type Item,type Structure,type Snapshot} from '@/lib/game';
-import {Renderer} from '@/lib/renderer';
-import {registerGameTools} from '@/lib/webmcp';
-const icons=[Pickaxe,Shovel,Hammer,Boxes,Flame,Boxes,RotateCw,Pickaxe];
-type World={id:string;name:string;seed:number;updated_at:number;mine?:boolean};
-export default function Home(){
-  const canvas=useRef<HTMLCanvasElement>(null),mini=useRef<HTMLCanvasElement>(null),game=useRef<Game|null>(null),renderer=useRef<Renderer|null>(null);
-  const [,setTick]=useState(0),[panel,setPanel]=useState(''),[message,setMessage]=useState('Your next chapter starts here.'),[selected,setSelected]=useState(0),[build,setBuild]=useState<Structure|null>(null),[paused,setPaused]=useState(false),[guide,setGuide]=useState(true),[saveStatus,setSaveStatus]=useState('Connecting…'),[worlds,setWorlds]=useState<World[]>([]),[worldName,setWorldName]=useState(''),[busy,setBusy]=useState(false);
-  const worldId=useRef(''),homeId=useRef(''),buildRef=useRef<Structure|null>(null),panelRef=useRef(''),toastTimer=useRef<ReturnType<typeof setTimeout>|null>(null),revision=useRef(0),saving=useRef(false),bootStarted=useRef(false),ready=useRef(false);
-  const [nextCursor,setNextCursor]=useState<string|null>(null);
-  const [connected,setConnected]=useState(false),[connectionError,setConnectionError]=useState('');
-  const notify=(text:string)=>{setMessage(text);if(toastTimer.current)clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setMessage(''),4000);};
-  useEffect(()=>{const g=new Game();g.paused=true;game.current=g;g.notify=notify;const r=new Renderer(canvas.current!,g,()=>{setTick(n=>n+1);if(mini.current)r.minimap(mini.current);});renderer.current=r;const unregister=registerGameTools(g);
-    const keydown=(e:KeyboardEvent)=>{if(!ready.current||(e.target as HTMLElement)?.closest('input,textarea,select,[role=dialog]'))return;if(['Tab',' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))e.preventDefault();const k=e.key.toLowerCase();if(panelRef.current){if(k==='escape')setPanel('');return;}g.keys.add(k);if(e.repeat)return;
-      if(/^[1-8]$/.test(k)){const n=+k-1;g.state.selected=n;setSelected(n);const type=HOTBAR[n];const b=type in BUILDS?type as Structure:null;buildRef.current=b;setBuild(b);}
-      if(k==='e')g.interact();if(k==='f')g.eat();if(k==='r'){g.rotation=(g.rotation+1)%4;notify(`Facing ${['southeast','southwest','northwest','northeast'][g.rotation]}`);}if(k==='c')setPanel('craft');if(k==='b'||k==='tab')setPanel('inventory');if(k==='m')setPanel('world');if(k==='j')setPanel('research');if(k==='u')setPanel('universe');if(k==='escape'){g.paused=!g.paused;setPaused(g.paused);}if(k===' '&&g.cursor)g.mine(g.cursor.x,g.cursor.y);};
-    const keyup=(e:KeyboardEvent)=>g.keys.delete(e.key.toLowerCase()),blur=()=>g.keys.clear();window.addEventListener('keydown',keydown);window.addEventListener('keyup',keyup);window.addEventListener('blur',blur);
-    return()=>{unregister();r.destroy();window.removeEventListener('keydown',keydown);window.removeEventListener('keyup',keyup);window.removeEventListener('blur',blur);if(toastTimer.current)clearTimeout(toastTimer.current);};
-  },[]);
-  useEffect(()=>{panelRef.current=panel;if(game.current){game.current.keys.clear();game.current.paused=!ready.current||!!panel||paused;}},[panel,paused]);
-  async function api(path:string,options:RequestInit={}){const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...options.headers},signal:AbortSignal.timeout(20000)});const data=await response.json() as {error?:string;worlds:World[];nextCursor:string|null;id:string;state:Snapshot;revision:number;mine:boolean;seconds:number};if(!response.ok)throw new Error(data.error||'The connection failed. Please retry.');return data;}
-  function loadWorld(data:{id:string;state:Snapshot;revision:number;mine:boolean}){
-    const g=game.current!;g.state=data.state;g.tiles=[];g.animals=[];g.generate();g.readOnly=!data.mine;g.target=null;g.cursor=null;g.keys.clear();g.machineClock=0;g.cooldown=0;worldId.current=data.id;revision.current=data.revision;
-    if(data.mine)homeId.current=data.id;else{g.state.player.x=g.state.player.y=48.5;g.state.player.z=0;}
-    setSelected(g.state.selected);const item=HOTBAR[g.state.selected];const b=item in BUILDS?item as Structure:null;setBuild(b);buildRef.current=b;setSaveStatus(data.mine?'All progress saved':'Visiting saved world');setTick(n=>n+1);
+import { useEffect, useRef, useState } from 'react';
+import {
+  ArrowDown,
+  ArrowUpRight,
+  Backpack,
+  BookOpen,
+  Boxes,
+  Check,
+  ChevronRight,
+  Compass,
+  Flame,
+  Globe2,
+  Hammer,
+  Heart,
+  Leaf,
+  Lock,
+  Minus,
+  Orbit,
+  Pause,
+  Pickaxe,
+  Play,
+  Plus,
+  RotateCw,
+  Settings2,
+  Shield,
+  Shovel,
+  Sparkles,
+  Sun,
+  TreePine,
+  Wheat,
+  Zap,
+} from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Game,
+  HOTBAR,
+  ITEMS,
+  BUILDS,
+  TECHS,
+  MINERALS,
+  REFINING,
+  SIZE,
+  type Item,
+  type Structure,
+  type Snapshot,
+} from '@/lib/game';
+import { Renderer } from '@/lib/renderer';
+import { registerGameTools } from '@/lib/webmcp';
+const icons = [Pickaxe, Shovel, Hammer, Boxes, Flame, Boxes, RotateCw, Pickaxe];
+type World = {
+  id: string;
+  name: string;
+  seed: number;
+  updated_at: number;
+  mine?: boolean;
+};
+export default function Home() {
+  const canvas = useRef<HTMLCanvasElement>(null),
+    mini = useRef<HTMLCanvasElement>(null),
+    game = useRef<Game | null>(null),
+    renderer = useRef<Renderer | null>(null);
+  const [, setTick] = useState(0),
+    [panel, setPanel] = useState(''),
+    [message, setMessage] = useState('Your next chapter starts here.'),
+    [selected, setSelected] = useState(0),
+    [build, setBuild] = useState<Structure | null>(null),
+    [paused, setPaused] = useState(false),
+    [guide, setGuide] = useState(true),
+    [saveStatus, setSaveStatus] = useState('Connecting…'),
+    [worlds, setWorlds] = useState<World[]>([]),
+    [worldName, setWorldName] = useState(''),
+    [busy, setBusy] = useState(false);
+  const worldId = useRef(''),
+    homeId = useRef(''),
+    buildRef = useRef<Structure | null>(null),
+    panelRef = useRef(''),
+    toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
+    revision = useRef(0),
+    saving = useRef(false),
+    bootStarted = useRef(false),
+    ready = useRef(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false),
+    [connectionError, setConnectionError] = useState('');
+  const notify = (text: string) => {
+    setMessage(text);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setMessage(''), 4000);
+  };
+  useEffect(() => {
+    const g = new Game();
+    g.paused = true;
+    game.current = g;
+    g.notify = notify;
+    const r = new Renderer(canvas.current!, g, () => {
+      setTick((n) => n + 1);
+      if (mini.current) r.minimap(mini.current);
+    });
+    renderer.current = r;
+    const unregister = registerGameTools(g);
+    const keydown = (e: KeyboardEvent) => {
+      if (
+        !ready.current ||
+        (e.target as HTMLElement)?.closest(
+          'input,textarea,select,[role=dialog]',
+        )
+      )
+        return;
+      if (
+        [
+          'Tab',
+          ' ',
+          'ArrowUp',
+          'ArrowDown',
+          'ArrowLeft',
+          'ArrowRight',
+        ].includes(e.key)
+      )
+        e.preventDefault();
+      const k = e.key.toLowerCase();
+      if (panelRef.current) {
+        if (k === 'escape') setPanel('');
+        return;
+      }
+      g.keys.add(k);
+      if (e.repeat) return;
+      if (/^[1-8]$/.test(k)) {
+        const n = +k - 1;
+        g.state.selected = n;
+        setSelected(n);
+        const type = HOTBAR[n];
+        const b = type in BUILDS ? (type as Structure) : null;
+        buildRef.current = b;
+        setBuild(b);
+      }
+      if (k === 'e') g.interact();
+      if (k === 'f') g.eat();
+      if (k === 'r') {
+        g.rotation = (g.rotation + 1) % 4;
+        notify(
+          `Facing ${['southeast', 'southwest', 'northwest', 'northeast'][g.rotation]}`,
+        );
+      }
+      if (k === 'c') setPanel('craft');
+      if (k === 'b' || k === 'tab') setPanel('inventory');
+      if (k === 'm') setPanel('world');
+      if (k === 'j') setPanel('research');
+      if (k === 'u') setPanel('universe');
+      if (k === 'escape') {
+        g.paused = !g.paused;
+        setPaused(g.paused);
+      }
+      if (k === ' ' && g.cursor) g.mine(g.cursor.x, g.cursor.y);
+    };
+    const keyup = (e: KeyboardEvent) => g.keys.delete(e.key.toLowerCase()),
+      blur = () => g.keys.clear();
+    window.addEventListener('keydown', keydown);
+    window.addEventListener('keyup', keyup);
+    window.addEventListener('blur', blur);
+    return () => {
+      unregister();
+      r.destroy();
+      window.removeEventListener('keydown', keydown);
+      window.removeEventListener('keyup', keyup);
+      window.removeEventListener('blur', blur);
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, []);
+  useEffect(() => {
+    panelRef.current = panel;
+    if (game.current) {
+      game.current.keys.clear();
+      game.current.paused = !ready.current || !!panel || paused;
+    }
+  }, [panel, paused]);
+  async function api(path: string, options: RequestInit = {}) {
+    const headers = new Headers(options.headers);
+    headers.set('Content-Type', 'application/json');
+    const response = await fetch(path, {
+      ...options,
+      headers,
+      signal: AbortSignal.timeout(20000),
+    });
+    const data = (await response.json()) as {
+      error?: string;
+      worlds: World[];
+      nextCursor: string | null;
+      id: string;
+      state: Snapshot;
+      revision: number;
+      mine: boolean;
+      seconds: number;
+    };
+    if (!response.ok)
+      throw new Error(data.error || 'The connection failed. Please retry.');
+    return data;
   }
-  async function catalogue(){const data=await api('/api/worlds');setWorlds(data.worlds);setNextCursor(data.nextCursor);return data.worlds as World[];}
-  async function moreWorlds(){if(!nextCursor||busy)return;setBusy(true);try{const data=await api(`/api/worlds?before=${encodeURIComponent(nextCursor)}`);setWorlds(previous=>[...new Map([...previous,...data.worlds].map(w=>[w.id,w])).values()]);setNextCursor(data.nextCursor);}catch(e){notify((e as Error).message);}finally{setBusy(false);}}
-  async function connect(){setConnectionError('');setSaveStatus('Connecting…');try{const list=await catalogue();const mine=list.find(w=>w.mine);const data=mine?await api(`/api/worlds/${mine.id}`):await api('/api/worlds',{method:'POST',body:JSON.stringify({name:'Verdant Reach'})});loadWorld(data);ready.current=true;setConnected(true);game.current!.paused=!!panelRef.current;await catalogue();}catch(e){setConnectionError((e as Error).message);setSaveStatus('Connection unavailable');}}
-  async function save(){
-    const g=game.current;if(!g||!ready.current||g.readOnly||saving.current)return true;saving.current=true;setSaveStatus('Saving…');
-    const id=worldId.current,seconds=g.state.seconds;
-    try{const result=await api(`/api/worlds/${id}`,{method:'PUT',body:JSON.stringify({state:g.state,revision:revision.current})});if(worldId.current===id){revision.current=result.revision;g.state.seconds=result.seconds+Math.max(0,g.state.seconds-seconds);setSaveStatus('All progress saved');}return true;}catch(e){setSaveStatus('Save failed — retry');notify((e as Error).message);return false;}finally{saving.current=false;}
+  function loadWorld(data: {
+    id: string;
+    state: Snapshot;
+    revision: number;
+    mine: boolean;
+  }) {
+    const g = game.current!;
+    g.state = data.state;
+    g.tiles = [];
+    g.animals = [];
+    g.generate();
+    g.readOnly = !data.mine;
+    g.target = null;
+    g.cursor = null;
+    g.keys.clear();
+    g.machineClock = 0;
+    g.cooldown = 0;
+    worldId.current = data.id;
+    revision.current = data.revision;
+    if (data.mine) homeId.current = data.id;
+    else {
+      g.state.player.x = g.state.player.y = 48.5;
+      g.state.player.z = 0;
+    }
+    setSelected(g.state.selected);
+    const item = HOTBAR[g.state.selected];
+    const b = item in BUILDS ? (item as Structure) : null;
+    setBuild(b);
+    buildRef.current = b;
+    setSaveStatus(data.mine ? 'All progress saved' : 'Visiting saved world');
+    setTick((n) => n + 1);
   }
-  useEffect(()=>{if(!bootStarted.current){bootStarted.current=true;void connect();}const timer=setInterval(()=>{void save();},15000);const hidden=()=>{if(document.hidden)void save();};document.addEventListener('visibilitychange',hidden);return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',hidden);};},[]);
-  useEffect(()=>{if(panel==='universe'&&ready.current)void catalogue().catch(e=>notify(e.message));},[panel]);
-  async function travel(id:string){if(busy||id===worldId.current)return;setBusy(true);try{if(saving.current)throw new Error('A save is in progress. Try again in a moment.');if(!await save())return;loadWorld(await api(`/api/worlds/${id}`));setPanel('');setPaused(false);notify(`Arrived at ${game.current!.state.name}`);}catch(e){notify((e as Error).message);}finally{setBusy(false);}}
-  async function createWorld(){if(!worldName.trim()||busy)return;setBusy(true);try{if(saving.current)throw new Error('A save is in progress. Try again in a moment.');if(!await save())return;loadWorld(await api('/api/worlds',{method:'POST',body:JSON.stringify({name:worldName.trim()})}));setWorldName('');await catalogue();setPanel('');setPaused(false);notify('A new frontier. A fresh start.');}catch(e){notify((e as Error).message);}finally{setBusy(false);}}
-  const s=game.current?.state;
-  function choose(n:number){setSelected(n);if(game.current)game.current.state.selected=n;const type=HOTBAR[n];const b=type in BUILDS?type as Structure:null;setBuild(b);buildRef.current=b;}
-  function point(e:React.PointerEvent<HTMLCanvasElement>){const rect=e.currentTarget.getBoundingClientRect();return renderer.current!.unproject(e.clientX-rect.left,e.clientY-rect.top);}
-  function click(e:React.PointerEvent<HTMLCanvasElement>){if(!ready.current||!game.current||paused||panel)return;const p=point(e);if(e.button===2){game.current.dismantle(p.x,p.y);return;}if(buildRef.current)game.current.build(buildRef.current,p.x,p.y);else if(game.current.object(p.x,p.y)||game.current.building(p.x,p.y))game.current.mine(p.x,p.y);else game.current.target={x:p.x+.5,y:p.y+.5};}
-  const costs=(cost:Partial<Record<Item,number>>)=>Object.entries(cost).map(([i,n])=><span key={i} className={(s?.inventory[i as Item]||0)<n!?'short':''}>{n} {ITEMS[i as Item].name}</span>);
-  return <main className="game-shell">
-    <header className="topbar"><a className="brand" href="/" aria-label="Quaza home"><Orbit size={29}/><span>QUAZA<span className="brand-dot">.</span></span><small>FRONTIER ALPHA</small></a><nav className="main-nav" aria-label="Game menus"><button className={!panel?'active':''} onClick={()=>setPanel('')}><TreePine size={16}/>Explore</button><button onClick={()=>setPanel('craft')}><Hammer size={16}/>Craft & build <kbd>C</kbd></button><button onClick={()=>setPanel('research')}><Sparkles size={16}/>Research <kbd>J</kbd></button><button onClick={()=>setPanel('universe')}><Orbit size={16}/>Universe <kbd>U</kbd></button></nav><div className="header-end"><button className="save-status" onClick={()=>void save()} title="Save your progress now"><i/>{saveStatus}</button><button className="icon-button" aria-label="Open settings" onClick={()=>setPanel('settings')}><Settings2 size={19}/></button></div></header>
-    <section className="playfield" aria-label="Isometric survival world">
-      <canvas ref={canvas} className="world-canvas" aria-label="Game world. WASD to move. Click resources to gather. C to craft, B for inventory." onPointerMove={e=>{if(game.current&&renderer.current)game.current.cursor=point(e);}} onPointerLeave={()=>{if(game.current)game.current.cursor=null;}} onPointerDown={click} onContextMenu={e=>e.preventDefault()}/>
-      <div className="world-label"><span className="eyebrow"><i/> YOUR FRONTIER</span><h1>{s?.name||'Verdant Reach'}</h1><p><Leaf size={13}/> {s?.player.z?'Subterranean':'Temperate woodland'} <span>·</span> Seed {s?.seed||731904}</p><div className="world-chips"><span><Shield size={12}/>{game.current?.readOnly?'VISITING':'HOME WORLD'}</span><span>DAY {Math.floor((s?.seconds||0)/1200)+1}</span></div></div>
-      <div className="vitals hud-panel">{[{icon:Heart,name:'Health',n:s?.player.hp??100,color:'#c88b76'},{icon:Wheat,name:'Hunger',n:s?.player.food??100,color:'#d2b46b'},{icon:Zap,name:'Energy',n:s?.player.stamina??100,color:'#9eaf81'}].map(v=><div key={v.name}><v.icon size={15}/><span>{v.name}</span><div className="vital-track"><i style={{width:`${v.n}%`,background:v.color}}/></div><b>{Math.ceil(v.n)}</b></div>)}</div>
-      <aside className="right-hud"><button className="map-card hud-panel" onClick={()=>setPanel('world')} aria-label="Open world map"><div className="map-head"><span><Compass size={14}/>LOCAL MAP</span><ArrowUpRight size={14}/></div><div className="mini-wrap"><canvas ref={mini}/><span className="north">N</span></div><div className="coordinates"><span>{Math.floor(s?.player.x||48)}° E <i>/</i> {Math.floor(s?.player.y||48)}° N</span><span>{s?.player.z?`${s.player.z===1?24:68} m`:'SURFACE'}</span></div></button>
-      {guide&&<div className="field-guide hud-panel"><div className="guide-heading"><span><BookOpen size={15}/>FIELD NOTES</span><button onClick={()=>setGuide(false)} aria-label="Hide field notes">−</button></div><span className="chapter">CHAPTER 01</span><h2>A place to begin.</h2><p>Every great frontier starts with a few sticks and a little ambition.</p><div className="objectives">{[{name:'Gather your surroundings',sub:`${Math.min(s?.stats.gathered||0,12)} / 12 resources`,done:(s?.stats.gathered||0)>=12},{name:'Make yourself at home',sub:'Place your first structure',done:(s?.stats.built||0)>0},{name:'From earth to iron',sub:'Smelt your first ingot',done:(s?.stats.smelted||0)>0}].map((o,i)=><div key={o.name} className={o.done?'complete':''}><span>{o.done?<Check size={12}/>:i+1}</span><div>{o.name}<small>{o.sub}</small></div></div>)}</div><button className="text-button" onClick={()=>setPanel('journal')}>Open survival journal <ChevronRight size={15}/></button></div>}</aside>
-      <div className="scene-status"><Sun size={16}/><span>{s?.rules.daylight==='night'?'Endless night':s?.player.z?'Below the surface':'A quiet morning'}</span><i/><span>{paused?'Paused':game.current?.readOnly?'Visitor expedition':'Survival'}</span></div><div className="scene-actions"><button className="icon-button" aria-label="Zoom in" onClick={()=>{if(renderer.current)renderer.current.zoom=Math.min(3,renderer.current.zoom+.2);}}><Plus size={17}/></button><button className="icon-button" aria-label="Zoom out" onClick={()=>{if(renderer.current)renderer.current.zoom=Math.max(.8,renderer.current.zoom-.2);}}><Minus size={17}/></button><span/><button className="icon-button" aria-label={paused?'Resume':'Pause'} onClick={()=>setPaused(!paused)}>{paused?<Play size={17}/>:<Pause size={17}/>}</button></div>
-      {!connected&&<div className="connection-card" role="status"><strong>{connectionError?"The frontier is out of reach.":"Finding your frontier…"}</strong><p>{connectionError||"Connecting to your saved worlds."}</p>{connectionError&&<button className="primary-button" onClick={()=>void connect()}>Retry connection</button>}</div>}{message&&<div role="status" className="game-toast"><span>✦</span>{message}</div>}{paused&&!panel&&<div className="paused-screen"><span>TAKE A BREATH</span><h2>The frontier can wait.</h2><button className="primary-button" onClick={()=>setPaused(false)}><Play size={16}/> Continue exploring</button></div>}
-      <div className="tool-info"><span>{build?BUILDS[build].name:selected===1?'Field axe':'Stone pickaxe'}</span><small>{build?'Click to place · R to rotate · right-click to dismantle':'Click a resource to gather · click ground to walk'}</small></div><div className="hotbar-row"><button className="inventory-button" onClick={()=>setPanel('inventory')} aria-label="Open backpack"><Backpack size={22}/><kbd>B</kbd></button><div className="hotbar">{HOTBAR.map((tool,n)=>{const Icon=icons[n];return <button key={tool} onClick={()=>choose(n)} className={selected===n?'selected':''} title={tool in BUILDS?BUILDS[tool as Structure].name:tool}><kbd>{n+1}</kbd><Icon size={26}/>{tool in BUILDS&&<small>{Object.entries(BUILDS[tool as Structure].cost).reduce((v,[i,num])=>Math.min(v,Math.floor((s?.inventory[i as Item]||0)/num!)),999)}</small>}</button>;})}</div><button className="inventory-button craft-button" onClick={()=>setPanel('craft')} aria-label="Craft and build"><Hammer size={22}/><kbd>C</kbd></button></div>
-      <div className="touch-move" aria-label="Touch movement">{(['w','a','s','d'] as const).map(k=><button key={k} aria-label={`Move ${k}`} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);game.current?.keys.add(k);}} onPointerUp={()=>game.current?.keys.delete(k)} onPointerCancel={()=>game.current?.keys.delete(k)}>{({w:'↑',a:'←',s:'↓',d:'→'})[k]}</button>)}</div>
-    </section><footer className="bottom-bar"><div><span className="live-dot"/> A WORLD WITHOUT EDGES <span className="footer-separator">/</span><span>Wander far. Come full circle.</span></div><div><span><kbd>W A S D</kbd> Move</span><span><kbd>SHIFT</kbd> Sprint</span><span><kbd>E</kbd> Interact</span><span><kbd>F</kbd> Eat</span><button onClick={()=>setPanel('journal')}>Help <span>?</span></button></div></footer>
-    <Dialog open={!!panel} onOpenChange={open=>{if(!open)setPanel('');}}><DialogContent className="game-dialog"><DialogTitle>{({craft:'Make something useful.',inventory:'Your field pack.',research:'A little further, every day.',world:s?.name||'Your world',universe:'One universe. Endless frontiers.',settings:'Make yourself comfortable.',journal:'The survival journal.'} as Record<string,string>)[panel]||'Quaza'}</DialogTitle><DialogDescription>{({craft:'Turn the things you find into the things you need.',inventory:'Everything you have carried out of the wild.',research:'Build your way from a foothold to the stars.',world:'A flat-looking world that wraps in every direction.',universe:'Discover saved worlds created by other explorers.',settings:'Your expedition, your pace.',journal:'A few things worth knowing before you head out.'} as Record<string,string>)[panel]}</DialogDescription>{message&&<p className="dialog-feedback" role="status">{message}</p>}
-    {panel==='craft'&&<Tabs defaultValue="build"><TabsList><TabsTrigger value="build">Structures</TabsTrigger><TabsTrigger value="items">Handcrafting</TabsTrigger><TabsTrigger value="refine">Refining</TabsTrigger></TabsList><TabsContent value="build"><div className="recipe-grid">{Object.entries(BUILDS).map(([id,b])=><button className="recipe-card" key={id} onClick={()=>{if((s?.tech||0)<b.tech){notify(`Unlock ${TECHS[b.tech].name} first`);return;}setBuild(id as Structure);buildRef.current=id as Structure;setPanel('');notify(`Place ${b.name} near you. R rotates.`);}}><div className="recipe-top"><Hammer size={22}/>{(s?.tech||0)<b.tech&&<Lock size={14}/>}</div><strong>{b.name}</strong><p>{b.description}</p><div className="costs">{costs(b.cost)}</div></button>)}</div></TabsContent><TabsContent value="items"><div className="recipe-grid">{(['coal','concentrate','gear','circuit','science'] as Item[]).map(item=><button className="recipe-card" key={item} onClick={()=>game.current?.craft(item)}><span className="item-symbol" style={{color:ITEMS[item].color}}>{ITEMS[item].symbol}</span><strong>{ITEMS[item].name}</strong><p>{({coal:'3 timber → 1 charcoal',concentrate:`${Object.entries(REFINING[(s?.seed||0)%5].cost).map(([i,n])=>`${n} ${ITEMS[i as Item].name}`).join(' + ')} → 1 concentrate`,gear:'2 iron → 1 gear',circuit:'1 iron + 2 copper → 1 circuit',science:'3 timber + 3 stone → 1 research'} as Record<string,string>)[item]}</p><span className="text-button">Craft one <Plus size={14}/></span></button>)}</div></TabsContent><TabsContent value="refine"><div className="refining-note"><Flame size={32}/><h3>{MINERALS[(s?.seed||0)%5]} to iron</h3><p className="muted">Refining method: {REFINING[(s?.seed||0)%5].process}</p><p>{(s?.seed||0)%5===0?'Smelt 2 hematite and 1 coal in a furnace.':(s?.seed||0)%5===4?'Roast 3 siderite with 2 coal in a furnace. Alternatively, process it into concentrate.':'Use an ore processor or handcraft concentrate using the mineral-specific recipe. Smelt 2 concentrate with 1 coal in a furnace.'}</p><ol><li>Build a stone furnace near your camp.</li><li>Stand nearby and press E to load ingredients.</li><li>Wait four seconds. Press E again to collect iron.</li><li>Connect a drill → processor → furnace → chest with conveyors to automate.</li></ol><p className="muted">Furnaces require coal. Assemblers use iron and copper. A belt moves toward its arrow; rotate with R before placement.</p></div></TabsContent></Tabs>}
-    {panel==='inventory'&&<><div className="inventory-grid">{Object.entries(ITEMS).map(([id,i])=><div className="inventory-slot" key={id}><span style={{color:i.color}}>{i.symbol}</span><strong>{s?.inventory[id as Item]||0}</strong><small>{id==='ore'?MINERALS[(s?.seed||0)%5]:i.name}</small></div>)}</div><button className="primary-button" onClick={()=>game.current?.eat()}><Wheat size={16}/> Eat berries <span>+22 hunger</span></button></>}
-    {panel==='research'&&<><div className="research-summary"><Sparkles/><span>{s?.inventory.science||0} research available</span><small>{((s?.seconds||0)/3600).toFixed(1)} / 20 active hours to orbit</small></div><div className="tech-list">{TECHS.map((t,i)=><div className={`tech-row ${i<=(s?.tech||0)?'unlocked':''}`} key={t.name}><span className="era">{t.era}</span><div><strong>{t.name}</strong><p>{t.description}</p></div><button disabled={i!==(s?.tech||0)+1} onClick={()=>game.current?.research()}>{i<=(s?.tech||0)?<Check size={18}/>:<>{t.cost} <Sparkles size={13}/></>}</button></div>)}</div><p className="muted">Handcraft research to begin. Assemblers automate it in the Industrial age. Orbital travel also requires a built shuttle and 20 active hours.</p></>}
-    {panel==='journal'&&<div className="journal-content"><section><h3>01 / Read the land</h3><p>WASD moves you across the screen. Click ground to walk, or a nearby tree, rock or berry bush to gather. Space gathers the tile under your cursor. Hold Shift to sprint; F eats a berry.</p></section><section><h3>02 / Leave a mark</h3><p>C opens crafting. Choose a structure, then click a clear tile near you. R rotates it. Right-click dismantles a structure and recovers 75% of its cost. E loads nearby machines or collects their output.</p></section><section><h3>03 / Go deeper</h3><p>The world map opens access to two underground layers. Clear rock to reach copper and crystal deposits. Mineral reserves are finite, so move your drills when a vein runs out.</p></section><section><h3>04 / Shape a world</h3><p>A World anchor unlocks daylight, gravity and creature rules. Build an industrial district, a peaceful village or a permanent-night adventure. Visitors explore your saved world; they cannot alter it.</p></section><section><h3>05 / The long road to orbit</h3><p>Earn research, build a factory and work through five eras. After 20 active hours, an orbital shuttle can take your explorer into other players’ saved worlds. This alpha shares world builds asynchronously; other players are not simulated live.</p></section><button className="primary-button" onClick={()=>{setPanel('');setGuide(true);}}>Back to the frontier <ArrowUpRight size={16}/></button></div>}
-    {panel==='world'&&<><div className="world-overview"><Globe2 size={50}/><div><h3>{SIZE} × {SIZE} tiles. No edge.</h3><p>Walk off any boundary and continue seamlessly on the other side.</p><span>Seed {s?.seed} · {MINERALS[(s?.seed||0)%5]} deposits</span></div></div><button className="primary-button" onClick={()=>{game.current?.descend();setPanel('');}}><ArrowDown size={16}/>{s?.player.z===2?'Return to surface':s?.player.z===1?'Descend to crystal seams':'Enter the limestone caverns'}</button><p className="muted">The expedition entrance returns you to camp coordinates on each layer.</p><button className="secondary-button" onClick={()=>setPanel('settings')}><Settings2 size={15}/> World anchor controls</button></>}
-    {panel==='settings'&&<div className="settings-content"><h3>Expedition</h3><button className="setting-row" onClick={()=>setGuide(!guide)}><span>Field notes</span><b>{guide?'Visible':'Hidden'}</b></button><button className="setting-row" onClick={()=>setPaused(!paused)}><span>Simulation</span><b>{paused?'Paused':'Running'}</b></button><button className="setting-row" onClick={()=>void save()}><span>Save progress now</span><b>{saveStatus}</b></button><p className="muted">Your explorer is linked to this browser cookie. Worlds are saved on the server every 15 seconds. Save before closing the game.</p><h3>Factory floor</h3><p className="muted">Choose what each assembler produces. Stand near it and press E to load materials.</p>{Object.values(s?.buildings||{}).filter(b=>b.type==='assembler').map(b=><button className="setting-row" key={`${b.x},${b.y},${b.z}`} disabled={game.current?.readOnly} onClick={()=>{b.mode=b.mode==='gear'?'circuit':b.mode==='circuit'?'science':'gear';setTick(t=>t+1);}}><span>Assembler · {b.x}, {b.y} · layer {b.z}</span><b>{b.mode}</b></button>)}<h3>World anchor</h3><p className="muted">{Object.values(s?.buildings||{}).some(b=>b.type==='beacon')?'Your anchor controls the world rules.':'Build a World anchor to unlock these controls.'}</p>{(['daylight','gravity','peaceful'] as const).map(rule=><button key={rule} className="setting-row" disabled={!Object.values(s?.buildings||{}).some(b=>b.type==='beacon')||game.current?.readOnly} onClick={()=>{if(!s)return;if(rule==='daylight')s.rules.daylight=s.rules.daylight==='cycle'?'day':s.rules.daylight==='day'?'night':'cycle';if(rule==='gravity')s.rules.gravity=s.rules.gravity===1?.6:s.rules.gravity===.6?1.5:1;if(rule==='peaceful')s.rules.peaceful=!s.rules.peaceful;setTick(t=>t+1);}}><span>{rule==='peaceful'?'Peaceful creatures':rule==='gravity'?'Gravity':'Daylight'}</span><b>{String(s?.rules[rule])}</b></button>)}</div>}
-    {panel==='universe'&&<div className="universe-content"><div className="universe-banner"><Orbit size={70}/><div><span className="eyebrow">THE SHARED FRONTIER</span><h3>Your world is one of many.</h3><p>Every created world receives a permanent address. An orbital shuttle unlocks expeditions to other saved worlds.</p></div></div><div className="world-list">{worlds.map(w=><button key={w.id} className="world-row" disabled={busy} onClick={()=>void travel(w.id)}><Globe2 size={24}/><div><strong>{w.name}</strong><small>Seed {w.seed} · {MINERALS[w.seed%5]}</small></div><span>{w.id===worldId.current?'YOU ARE HERE':w.mine?'ENTER WORLD':<Lock size={15}/>} </span></button>)}</div>{nextCursor&&<button className="secondary-button" disabled={busy} onClick={()=>void moreWorlds()}>Discover more worlds</button>}{!worlds.length&&<p className="muted">No worlds are available yet.</p>}<form className="world-create" onSubmit={e=>{e.preventDefault();void createWorld();}}><input aria-label="New world name" placeholder="Name a new frontier…" value={worldName} maxLength={40} onChange={e=>setWorldName(e.target.value)}/><button className="primary-button" disabled={busy||!worldName.trim()} type="submit"><Plus size={16}/>{busy?'Preparing…':'Create world'}</button></form><p className="muted">Creating a world starts a separate explorer with fresh progression. Your existing worlds stay saved. Other explorers can visit after reaching orbit. Up to 10 worlds per explorer.</p>{game.current?.readOnly&&<button className="secondary-button" onClick={()=>void travel(homeId.current)}>Return to home world</button>}</div>}
-    </DialogContent></Dialog>
-  </main>;
+  async function catalogue() {
+    const data = await api('/api/worlds');
+    setWorlds(data.worlds);
+    setNextCursor(data.nextCursor);
+    return data.worlds as World[];
+  }
+  async function moreWorlds() {
+    if (!nextCursor || busy) return;
+    setBusy(true);
+    try {
+      const data = await api(
+        `/api/worlds?before=${encodeURIComponent(nextCursor)}`,
+      );
+      setWorlds((previous) => [
+        ...new Map(
+          [...previous, ...data.worlds].map((w) => [w.id, w]),
+        ).values(),
+      ]);
+      setNextCursor(data.nextCursor);
+    } catch (e) {
+      notify((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function connect() {
+    setConnectionError('');
+    setSaveStatus('Connecting…');
+    try {
+      const list = await catalogue();
+      const mine = list.find((w) => w.mine);
+      const data = mine
+        ? await api(`/api/worlds/${mine.id}`)
+        : await api('/api/worlds', {
+            method: 'POST',
+            body: JSON.stringify({ name: 'Verdant Reach' }),
+          });
+      loadWorld(data);
+      ready.current = true;
+      setConnected(true);
+      game.current!.paused = !!panelRef.current;
+      await catalogue();
+    } catch (e) {
+      setConnectionError((e as Error).message);
+      setSaveStatus('Connection unavailable');
+    }
+  }
+  async function save() {
+    const g = game.current;
+    if (!g || !ready.current || g.readOnly || saving.current) return true;
+    saving.current = true;
+    setSaveStatus('Saving…');
+    const id = worldId.current,
+      seconds = g.state.seconds;
+    try {
+      const result = await api(`/api/worlds/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ state: g.state, revision: revision.current }),
+      });
+      if (worldId.current === id) {
+        revision.current = result.revision;
+        g.state.seconds =
+          result.seconds + Math.max(0, g.state.seconds - seconds);
+        setSaveStatus('All progress saved');
+      }
+      return true;
+    } catch (e) {
+      setSaveStatus('Save failed — retry');
+      notify((e as Error).message);
+      return false;
+    } finally {
+      saving.current = false;
+    }
+  }
+  useEffect(() => {
+    if (!bootStarted.current) {
+      bootStarted.current = true;
+      void connect();
+    }
+    const timer = setInterval(() => {
+      void save();
+    }, 15000);
+    const hidden = () => {
+      if (document.hidden) void save();
+    };
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', hidden);
+    };
+  }, []);
+  useEffect(() => {
+    if (panel === 'universe' && ready.current)
+      void catalogue().catch((e) => notify(e.message));
+  }, [panel]);
+  async function travel(id: string) {
+    if (busy || id === worldId.current) return;
+    setBusy(true);
+    try {
+      if (saving.current)
+        throw new Error('A save is in progress. Try again in a moment.');
+      if (!(await save())) return;
+      loadWorld(await api(`/api/worlds/${id}`));
+      setPanel('');
+      setPaused(false);
+      notify(`Arrived at ${game.current!.state.name}`);
+    } catch (e) {
+      notify((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function createWorld() {
+    if (!worldName.trim() || busy) return;
+    setBusy(true);
+    try {
+      if (saving.current)
+        throw new Error('A save is in progress. Try again in a moment.');
+      if (!(await save())) return;
+      loadWorld(
+        await api('/api/worlds', {
+          method: 'POST',
+          body: JSON.stringify({ name: worldName.trim() }),
+        }),
+      );
+      setWorldName('');
+      await catalogue();
+      setPanel('');
+      setPaused(false);
+      notify('A new frontier. A fresh start.');
+    } catch (e) {
+      notify((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const s = game.current?.state;
+  function choose(n: number) {
+    setSelected(n);
+    if (game.current) game.current.state.selected = n;
+    const type = HOTBAR[n];
+    const b = type in BUILDS ? (type as Structure) : null;
+    setBuild(b);
+    buildRef.current = b;
+  }
+  function point(e: React.PointerEvent<HTMLCanvasElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return renderer.current!.unproject(
+      e.clientX - rect.left,
+      e.clientY - rect.top,
+    );
+  }
+  function click(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!ready.current || !game.current || paused || panel) return;
+    const p = point(e);
+    if (e.button === 2) {
+      game.current.dismantle(p.x, p.y);
+      return;
+    }
+    if (buildRef.current) game.current.build(buildRef.current, p.x, p.y);
+    else if (game.current.object(p.x, p.y) || game.current.building(p.x, p.y))
+      game.current.mine(p.x, p.y);
+    else game.current.target = { x: p.x + 0.5, y: p.y + 0.5 };
+  }
+  const costs = (cost: Partial<Record<Item, number>>) =>
+    Object.entries(cost).map(([i, n]) => (
+      <span
+        key={i}
+        className={(s?.inventory[i as Item] || 0) < n! ? 'short' : ''}
+      >
+        {n} {ITEMS[i as Item].name}
+      </span>
+    ));
+  return (
+    <main className="game-shell">
+      <header className="topbar">
+        <button
+          type="button"
+          className="brand"
+          aria-label="Quaza home"
+          onClick={() => setPanel("")}
+        >
+          <Orbit size={29} />
+          <span>
+            QUAZA<span className="brand-dot">.</span>
+          </span>
+          <small>FRONTIER ALPHA</small>
+        </button>
+        <nav className="main-nav" aria-label="Game menus">
+          <button
+            className={!panel ? 'active' : ''}
+            onClick={() => setPanel('')}
+          >
+            <TreePine size={16} />
+            Explore
+          </button>
+          <button onClick={() => setPanel('craft')}>
+            <Hammer size={16} />
+            Craft & build <kbd>C</kbd>
+          </button>
+          <button onClick={() => setPanel('research')}>
+            <Sparkles size={16} />
+            Research <kbd>J</kbd>
+          </button>
+          <button onClick={() => setPanel('universe')}>
+            <Orbit size={16} />
+            Universe <kbd>U</kbd>
+          </button>
+        </nav>
+        <div className="header-end">
+          <button
+            className="save-status"
+            onClick={() => void save()}
+            title="Save your progress now"
+          >
+            <i />
+            {saveStatus}
+          </button>
+          <button
+            className="icon-button"
+            aria-label="Open settings"
+            onClick={() => setPanel('settings')}
+          >
+            <Settings2 size={19} />
+          </button>
+        </div>
+      </header>
+      <section className="playfield" aria-label="Isometric survival world">
+        <canvas
+          ref={canvas}
+          className="world-canvas"
+          aria-label="Game world. WASD to move. Click resources to gather. C to craft, B for inventory."
+          onPointerMove={(e) => {
+            if (game.current && renderer.current)
+              game.current.cursor = point(e);
+          }}
+          onPointerLeave={() => {
+            if (game.current) game.current.cursor = null;
+          }}
+          onPointerDown={click}
+          onContextMenu={(e) => e.preventDefault()}
+        />
+        <div className="world-label">
+          <span className="eyebrow">
+            <i /> YOUR FRONTIER
+          </span>
+          <h1>{s?.name || 'Verdant Reach'}</h1>
+          <p>
+            <Leaf size={13} />{' '}
+            {s?.player.z ? 'Subterranean' : 'Temperate woodland'} <span>·</span>{' '}
+            Seed {s?.seed || 731904}
+          </p>
+          <div className="world-chips">
+            <span>
+              <Shield size={12} />
+              {game.current?.readOnly ? 'VISITING' : 'HOME WORLD'}
+            </span>
+            <span>DAY {Math.floor((s?.seconds || 0) / 1200) + 1}</span>
+          </div>
+        </div>
+        <div className="vitals hud-panel">
+          {[
+            {
+              icon: Heart,
+              name: 'Health',
+              n: s?.player.hp ?? 100,
+              color: '#c88b76',
+            },
+            {
+              icon: Wheat,
+              name: 'Hunger',
+              n: s?.player.food ?? 100,
+              color: '#d2b46b',
+            },
+            {
+              icon: Zap,
+              name: 'Energy',
+              n: s?.player.stamina ?? 100,
+              color: '#9eaf81',
+            },
+          ].map((v) => (
+            <div key={v.name}>
+              <v.icon size={15} />
+              <span>{v.name}</span>
+              <div className="vital-track">
+                <i style={{ width: `${v.n}%`, background: v.color }} />
+              </div>
+              <b>{Math.ceil(v.n)}</b>
+            </div>
+          ))}
+        </div>
+        <aside className="right-hud">
+          <button
+            className="map-card hud-panel"
+            onClick={() => setPanel('world')}
+            aria-label="Open world map"
+          >
+            <div className="map-head">
+              <span>
+                <Compass size={14} />
+                LOCAL MAP
+              </span>
+              <ArrowUpRight size={14} />
+            </div>
+            <div className="mini-wrap">
+              <canvas ref={mini} />
+              <span className="north">N</span>
+            </div>
+            <div className="coordinates">
+              <span>
+                {Math.floor(s?.player.x || 48)}° E <i>/</i>{' '}
+                {Math.floor(s?.player.y || 48)}° N
+              </span>
+              <span>
+                {s?.player.z ? `${s.player.z === 1 ? 24 : 68} m` : 'SURFACE'}
+              </span>
+            </div>
+          </button>
+          {guide && (
+            <div className="field-guide hud-panel">
+              <div className="guide-heading">
+                <span>
+                  <BookOpen size={15} />
+                  FIELD NOTES
+                </span>
+                <button
+                  onClick={() => setGuide(false)}
+                  aria-label="Hide field notes"
+                >
+                  −
+                </button>
+              </div>
+              <span className="chapter">CHAPTER 01</span>
+              <h2>A place to begin.</h2>
+              <p>
+                Every great frontier starts with a few sticks and a little
+                ambition.
+              </p>
+              <div className="objectives">
+                {[
+                  {
+                    name: 'Gather your surroundings',
+                    sub: `${Math.min(s?.stats.gathered || 0, 12)} / 12 resources`,
+                    done: (s?.stats.gathered || 0) >= 12,
+                  },
+                  {
+                    name: 'Make yourself at home',
+                    sub: 'Place your first structure',
+                    done: (s?.stats.built || 0) > 0,
+                  },
+                  {
+                    name: 'From earth to iron',
+                    sub: 'Smelt your first ingot',
+                    done: (s?.stats.smelted || 0) > 0,
+                  },
+                ].map((o, i) => (
+                  <div key={o.name} className={o.done ? 'complete' : ''}>
+                    <span>{o.done ? <Check size={12} /> : i + 1}</span>
+                    <div>
+                      {o.name}
+                      <small>{o.sub}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                className="text-button"
+                onClick={() => setPanel('journal')}
+              >
+                Open survival journal <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
+        </aside>
+        <div className="scene-status">
+          <Sun size={16} />
+          <span>
+            {s?.rules.daylight === 'night'
+              ? 'Endless night'
+              : s?.player.z
+                ? 'Below the surface'
+                : 'A quiet morning'}
+          </span>
+          <i />
+          <span>
+            {paused
+              ? 'Paused'
+              : game.current?.readOnly
+                ? 'Visitor expedition'
+                : 'Survival'}
+          </span>
+        </div>
+        <div className="scene-actions">
+          <button
+            className="icon-button"
+            aria-label="Zoom in"
+            onClick={() => {
+              if (renderer.current)
+                renderer.current.zoom = Math.min(
+                  3,
+                  renderer.current.zoom + 0.2,
+                );
+            }}
+          >
+            <Plus size={17} />
+          </button>
+          <button
+            className="icon-button"
+            aria-label="Zoom out"
+            onClick={() => {
+              if (renderer.current)
+                renderer.current.zoom = Math.max(
+                  0.8,
+                  renderer.current.zoom - 0.2,
+                );
+            }}
+          >
+            <Minus size={17} />
+          </button>
+          <span />
+          <button
+            className="icon-button"
+            aria-label={paused ? 'Resume' : 'Pause'}
+            onClick={() => setPaused(!paused)}
+          >
+            {paused ? <Play size={17} /> : <Pause size={17} />}
+          </button>
+        </div>
+        {!connected && (
+          <div className="connection-card" role="status">
+            <strong>
+              {connectionError
+                ? 'The frontier is out of reach.'
+                : 'Finding your frontier…'}
+            </strong>
+            <p>{connectionError || 'Connecting to your saved worlds.'}</p>
+            {connectionError && (
+              <button className="primary-button" onClick={() => void connect()}>
+                Retry connection
+              </button>
+            )}
+          </div>
+        )}
+        {message && (
+          <div role="status" className="game-toast">
+            <span>✦</span>
+            {message}
+          </div>
+        )}
+        {paused && !panel && (
+          <div className="paused-screen">
+            <span>TAKE A BREATH</span>
+            <h2>The frontier can wait.</h2>
+            <button className="primary-button" onClick={() => setPaused(false)}>
+              <Play size={16} /> Continue exploring
+            </button>
+          </div>
+        )}
+        <div className="tool-info">
+          <span>
+            {build
+              ? BUILDS[build].name
+              : selected === 1
+                ? 'Field axe'
+                : 'Stone pickaxe'}
+          </span>
+          <small>
+            {build
+              ? 'Click to place · R to rotate · right-click to dismantle'
+              : 'Click a resource to gather · click ground to walk'}
+          </small>
+        </div>
+        <div className="hotbar-row">
+          <button
+            className="inventory-button"
+            onClick={() => setPanel('inventory')}
+            aria-label="Open backpack"
+          >
+            <Backpack size={22} />
+            <kbd>B</kbd>
+          </button>
+          <div className="hotbar">
+            {HOTBAR.map((tool, n) => {
+              const Icon = icons[n];
+              return (
+                <button
+                  key={tool}
+                  onClick={() => choose(n)}
+                  className={selected === n ? 'selected' : ''}
+                  title={tool in BUILDS ? BUILDS[tool as Structure].name : tool}
+                >
+                  <kbd>{n + 1}</kbd>
+                  <Icon size={26} />
+                  {tool in BUILDS && (
+                    <small>
+                      {Object.entries(BUILDS[tool as Structure].cost).reduce(
+                        (v, [i, num]) =>
+                          Math.min(
+                            v,
+                            Math.floor((s?.inventory[i as Item] || 0) / num!),
+                          ),
+                        999,
+                      )}
+                    </small>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            className="inventory-button craft-button"
+            onClick={() => setPanel('craft')}
+            aria-label="Craft and build"
+          >
+            <Hammer size={22} />
+            <kbd>C</kbd>
+          </button>
+        </div>
+        <div className="touch-move" aria-label="Touch movement">
+          {(['w', 'a', 's', 'd'] as const).map((k) => (
+            <button
+              key={k}
+              aria-label={`Move ${k}`}
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                game.current?.keys.add(k);
+              }}
+              onPointerUp={() => game.current?.keys.delete(k)}
+              onPointerCancel={() => game.current?.keys.delete(k)}
+            >
+              {{ w: '↑', a: '←', s: '↓', d: '→' }[k]}
+            </button>
+          ))}
+        </div>
+      </section>
+      <footer className="bottom-bar">
+        <div>
+          <span className="live-dot" /> A WORLD WITHOUT EDGES{' '}
+          <span className="footer-separator">/</span>
+          <span>Wander far. Come full circle.</span>
+        </div>
+        <div>
+          <span>
+            <kbd>W A S D</kbd> Move
+          </span>
+          <span>
+            <kbd>SHIFT</kbd> Sprint
+          </span>
+          <span>
+            <kbd>E</kbd> Interact
+          </span>
+          <span>
+            <kbd>F</kbd> Eat
+          </span>
+          <button onClick={() => setPanel('journal')}>
+            Help <span>?</span>
+          </button>
+        </div>
+      </footer>
+      <Dialog
+        open={!!panel}
+        onOpenChange={(open) => {
+          if (!open) setPanel('');
+        }}
+      >
+        <DialogContent className="game-dialog">
+          <DialogTitle>
+            {(
+              {
+                craft: 'Make something useful.',
+                inventory: 'Your field pack.',
+                research: 'A little further, every day.',
+                world: s?.name || 'Your world',
+                universe: 'One universe. Endless frontiers.',
+                settings: 'Make yourself comfortable.',
+                journal: 'The survival journal.',
+              } as Record<string, string>
+            )[panel] || 'Quaza'}
+          </DialogTitle>
+          <DialogDescription>
+            {
+              (
+                {
+                  craft: 'Turn the things you find into the things you need.',
+                  inventory: 'Everything you have carried out of the wild.',
+                  research: 'Build your way from a foothold to the stars.',
+                  world: 'A flat-looking world that wraps in every direction.',
+                  universe: 'Discover saved worlds created by other explorers.',
+                  settings: 'Your expedition, your pace.',
+                  journal: 'A few things worth knowing before you head out.',
+                } as Record<string, string>
+              )[panel]
+            }
+          </DialogDescription>
+          {message && (
+            <p className="dialog-feedback" role="status">
+              {message}
+            </p>
+          )}
+          {panel === 'craft' && (
+            <Tabs defaultValue="build">
+              <TabsList>
+                <TabsTrigger value="build">Structures</TabsTrigger>
+                <TabsTrigger value="items">Handcrafting</TabsTrigger>
+                <TabsTrigger value="refine">Refining</TabsTrigger>
+              </TabsList>
+              <TabsContent value="build">
+                <div className="recipe-grid">
+                  {Object.entries(BUILDS).map(([id, b]) => (
+                    <button
+                      className="recipe-card"
+                      key={id}
+                      onClick={() => {
+                        if ((s?.tech || 0) < b.tech) {
+                          notify(`Unlock ${TECHS[b.tech].name} first`);
+                          return;
+                        }
+                        setBuild(id as Structure);
+                        buildRef.current = id as Structure;
+                        setPanel('');
+                        notify(`Place ${b.name} near you. R rotates.`);
+                      }}
+                    >
+                      <div className="recipe-top">
+                        <Hammer size={22} />
+                        {(s?.tech || 0) < b.tech && <Lock size={14} />}
+                      </div>
+                      <strong>{b.name}</strong>
+                      <p>{b.description}</p>
+                      <div className="costs">{costs(b.cost)}</div>
+                    </button>
+                  ))}
+                </div>
+              </TabsContent>
+              <TabsContent value="items">
+                <div className="recipe-grid">
+                  {(
+                    [
+                      'coal',
+                      'concentrate',
+                      'gear',
+                      'circuit',
+                      'science',
+                    ] as Item[]
+                  ).map((item) => (
+                    <button
+                      className="recipe-card"
+                      key={item}
+                      onClick={() => game.current?.craft(item)}
+                    >
+                      <span
+                        className="item-symbol"
+                        style={{ color: ITEMS[item].color }}
+                      >
+                        {ITEMS[item].symbol}
+                      </span>
+                      <strong>{ITEMS[item].name}</strong>
+                      <p>
+                        {
+                          (
+                            {
+                              coal: '3 timber → 1 charcoal',
+                              concentrate: `${Object.entries(
+                                REFINING[(s?.seed || 0) % 5].cost,
+                              )
+                                .map(
+                                  ([i, n]) => `${n} ${ITEMS[i as Item].name}`,
+                                )
+                                .join(' + ')} → 1 concentrate`,
+                              gear: '2 iron → 1 gear',
+                              circuit: '1 iron + 2 copper → 1 circuit',
+                              science: '3 timber + 3 stone → 1 research',
+                            } as Record<string, string>
+                          )[item]
+                        }
+                      </p>
+                      <span className="text-button">
+                        Craft one <Plus size={14} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </TabsContent>
+              <TabsContent value="refine">
+                <div className="refining-note">
+                  <Flame size={32} />
+                  <h3>{MINERALS[(s?.seed || 0) % 5]} to iron</h3>
+                  <p className="muted">
+                    Refining method: {REFINING[(s?.seed || 0) % 5].process}
+                  </p>
+                  <p>
+                    {(s?.seed || 0) % 5 === 0
+                      ? 'Smelt 2 hematite and 1 coal in a furnace.'
+                      : (s?.seed || 0) % 5 === 4
+                        ? 'Roast 3 siderite with 2 coal in a furnace. Alternatively, process it into concentrate.'
+                        : 'Use an ore processor or handcraft concentrate using the mineral-specific recipe. Smelt 2 concentrate with 1 coal in a furnace.'}
+                  </p>
+                  <ol>
+                    <li>Build a stone furnace near your camp.</li>
+                    <li>Stand nearby and press E to load ingredients.</li>
+                    <li>Wait four seconds. Press E again to collect iron.</li>
+                    <li>
+                      Connect a drill → processor → furnace → chest with
+                      conveyors to automate.
+                    </li>
+                  </ol>
+                  <p className="muted">
+                    Furnaces require coal. Assemblers use iron and copper. A
+                    belt moves toward its arrow; rotate with R before placement.
+                  </p>
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
+          {panel === 'inventory' && (
+            <>
+              <div className="inventory-grid">
+                {Object.entries(ITEMS).map(([id, i]) => (
+                  <div className="inventory-slot" key={id}>
+                    <span style={{ color: i.color }}>{i.symbol}</span>
+                    <strong>{s?.inventory[id as Item] || 0}</strong>
+                    <small>
+                      {id === 'ore' ? MINERALS[(s?.seed || 0) % 5] : i.name}
+                    </small>
+                  </div>
+                ))}
+              </div>
+              <button
+                className="primary-button"
+                onClick={() => game.current?.eat()}
+              >
+                <Wheat size={16} /> Eat berries <span>+22 hunger</span>
+              </button>
+            </>
+          )}
+          {panel === 'research' && (
+            <>
+              <div className="research-summary">
+                <Sparkles />
+                <span>{s?.inventory.science || 0} research available</span>
+                <small>
+                  {((s?.seconds || 0) / 3600).toFixed(1)} / 20 active hours to
+                  orbit
+                </small>
+              </div>
+              <div className="tech-list">
+                {TECHS.map((t, i) => (
+                  <div
+                    className={`tech-row ${i <= (s?.tech || 0) ? 'unlocked' : ''}`}
+                    key={t.name}
+                  >
+                    <span className="era">{t.era}</span>
+                    <div>
+                      <strong>{t.name}</strong>
+                      <p>{t.description}</p>
+                    </div>
+                    <button
+                      disabled={i !== (s?.tech || 0) + 1}
+                      onClick={() => game.current?.research()}
+                    >
+                      {i <= (s?.tech || 0) ? (
+                        <Check size={18} />
+                      ) : (
+                        <>
+                          {t.cost} <Sparkles size={13} />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="muted">
+                Handcraft research to begin. Assemblers automate it in the
+                Industrial age. Orbital travel also requires a built shuttle and
+                20 active hours.
+              </p>
+            </>
+          )}
+          {panel === 'journal' && (
+            <div className="journal-content">
+              <section>
+                <h3>01 / Read the land</h3>
+                <p>
+                  WASD moves you across the screen. Click ground to walk, or a
+                  nearby tree, rock or berry bush to gather. Space gathers the
+                  tile under your cursor. Hold Shift to sprint; F eats a berry.
+                </p>
+              </section>
+              <section>
+                <h3>02 / Leave a mark</h3>
+                <p>
+                  C opens crafting. Choose a structure, then click a clear tile
+                  near you. R rotates it. Right-click dismantles a structure and
+                  recovers 75% of its cost. E loads nearby machines or collects
+                  their output.
+                </p>
+              </section>
+              <section>
+                <h3>03 / Go deeper</h3>
+                <p>
+                  The world map opens access to two underground layers. Clear
+                  rock to reach copper and crystal deposits. Mineral reserves
+                  are finite, so move your drills when a vein runs out.
+                </p>
+              </section>
+              <section>
+                <h3>04 / Shape a world</h3>
+                <p>
+                  A World anchor unlocks daylight, gravity and creature rules.
+                  Build an industrial district, a peaceful village or a
+                  permanent-night adventure. Visitors explore your saved world;
+                  they cannot alter it.
+                </p>
+              </section>
+              <section>
+                <h3>05 / The long road to orbit</h3>
+                <p>
+                  Earn research, build a factory and work through five eras.
+                  After 20 active hours, an orbital shuttle can take your
+                  explorer into other players’ saved worlds. This alpha shares
+                  world builds asynchronously; other players are not simulated
+                  live.
+                </p>
+              </section>
+              <button
+                className="primary-button"
+                onClick={() => {
+                  setPanel('');
+                  setGuide(true);
+                }}
+              >
+                Back to the frontier <ArrowUpRight size={16} />
+              </button>
+            </div>
+          )}
+          {panel === 'world' && (
+            <>
+              <div className="world-overview">
+                <Globe2 size={50} />
+                <div>
+                  <h3>
+                    {SIZE} × {SIZE} tiles. No edge.
+                  </h3>
+                  <p>
+                    Walk off any boundary and continue seamlessly on the other
+                    side.
+                  </p>
+                  <span>
+                    Seed {s?.seed} · {MINERALS[(s?.seed || 0) % 5]} deposits
+                  </span>
+                </div>
+              </div>
+              <button
+                className="primary-button"
+                onClick={() => {
+                  game.current?.descend();
+                  setPanel('');
+                }}
+              >
+                <ArrowDown size={16} />
+                {s?.player.z === 2
+                  ? 'Return to surface'
+                  : s?.player.z === 1
+                    ? 'Descend to crystal seams'
+                    : 'Enter the limestone caverns'}
+              </button>
+              <p className="muted">
+                The expedition entrance returns you to camp coordinates on each
+                layer.
+              </p>
+              <button
+                className="secondary-button"
+                onClick={() => setPanel('settings')}
+              >
+                <Settings2 size={15} /> World anchor controls
+              </button>
+            </>
+          )}
+          {panel === 'settings' && (
+            <div className="settings-content">
+              <h3>Expedition</h3>
+              <button className="setting-row" onClick={() => setGuide(!guide)}>
+                <span>Field notes</span>
+                <b>{guide ? 'Visible' : 'Hidden'}</b>
+              </button>
+              <button
+                className="setting-row"
+                onClick={() => setPaused(!paused)}
+              >
+                <span>Simulation</span>
+                <b>{paused ? 'Paused' : 'Running'}</b>
+              </button>
+              <button className="setting-row" onClick={() => void save()}>
+                <span>Save progress now</span>
+                <b>{saveStatus}</b>
+              </button>
+              <p className="muted">
+                Your explorer is linked to this browser cookie. Worlds are saved
+                on the server every 15 seconds. Save before closing the game.
+              </p>
+              <h3>Factory floor</h3>
+              <p className="muted">
+                Choose what each assembler produces. Stand near it and press E
+                to load materials.
+              </p>
+              {Object.values(s?.buildings || {})
+                .filter((b) => b.type === 'assembler')
+                .map((b) => (
+                  <button
+                    className="setting-row"
+                    key={`${b.x},${b.y},${b.z}`}
+                    disabled={game.current?.readOnly}
+                    onClick={() => {
+                      b.mode =
+                        b.mode === 'gear'
+                          ? 'circuit'
+                          : b.mode === 'circuit'
+                            ? 'science'
+                            : 'gear';
+                      setTick((t) => t + 1);
+                    }}
+                  >
+                    <span>
+                      Assembler · {b.x}, {b.y} · layer {b.z}
+                    </span>
+                    <b>{b.mode}</b>
+                  </button>
+                ))}
+              <h3>World anchor</h3>
+              <p className="muted">
+                {Object.values(s?.buildings || {}).some(
+                  (b) => b.type === 'beacon',
+                )
+                  ? 'Your anchor controls the world rules.'
+                  : 'Build a World anchor to unlock these controls.'}
+              </p>
+              {(['daylight', 'gravity', 'peaceful'] as const).map((rule) => (
+                <button
+                  key={rule}
+                  className="setting-row"
+                  disabled={
+                    !Object.values(s?.buildings || {}).some(
+                      (b) => b.type === 'beacon',
+                    ) || game.current?.readOnly
+                  }
+                  onClick={() => {
+                    if (!s) return;
+                    if (rule === 'daylight')
+                      s.rules.daylight =
+                        s.rules.daylight === 'cycle'
+                          ? 'day'
+                          : s.rules.daylight === 'day'
+                            ? 'night'
+                            : 'cycle';
+                    if (rule === 'gravity')
+                      s.rules.gravity =
+                        s.rules.gravity === 1
+                          ? 0.6
+                          : s.rules.gravity === 0.6
+                            ? 1.5
+                            : 1;
+                    if (rule === 'peaceful')
+                      s.rules.peaceful = !s.rules.peaceful;
+                    setTick((t) => t + 1);
+                  }}
+                >
+                  <span>
+                    {rule === 'peaceful'
+                      ? 'Peaceful creatures'
+                      : rule === 'gravity'
+                        ? 'Gravity'
+                        : 'Daylight'}
+                  </span>
+                  <b>{String(s?.rules[rule])}</b>
+                </button>
+              ))}
+            </div>
+          )}
+          {panel === 'universe' && (
+            <div className="universe-content">
+              <div className="universe-banner">
+                <Orbit size={70} />
+                <div>
+                  <span className="eyebrow">THE SHARED FRONTIER</span>
+                  <h3>Your world is one of many.</h3>
+                  <p>
+                    Every created world receives a permanent address. An orbital
+                    shuttle unlocks expeditions to other saved worlds.
+                  </p>
+                </div>
+              </div>
+              <div className="world-list">
+                {worlds.map((w) => (
+                  <button
+                    key={w.id}
+                    className="world-row"
+                    disabled={busy}
+                    onClick={() => void travel(w.id)}
+                  >
+                    <Globe2 size={24} />
+                    <div>
+                      <strong>{w.name}</strong>
+                      <small>
+                        Seed {w.seed} · {MINERALS[w.seed % 5]}
+                      </small>
+                    </div>
+                    <span>
+                      {w.id === worldId.current ? (
+                        'YOU ARE HERE'
+                      ) : w.mine ? (
+                        'ENTER WORLD'
+                      ) : (
+                        <Lock size={15} />
+                      )}{' '}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {nextCursor && (
+                <button
+                  className="secondary-button"
+                  disabled={busy}
+                  onClick={() => void moreWorlds()}
+                >
+                  Discover more worlds
+                </button>
+              )}
+              {!worlds.length && (
+                <p className="muted">No worlds are available yet.</p>
+              )}
+              <form
+                className="world-create"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void createWorld();
+                }}
+              >
+                <input
+                  aria-label="New world name"
+                  placeholder="Name a new frontier…"
+                  value={worldName}
+                  maxLength={40}
+                  onChange={(e) => setWorldName(e.target.value)}
+                />
+                <button
+                  className="primary-button"
+                  disabled={busy || !worldName.trim()}
+                  type="submit"
+                >
+                  <Plus size={16} />
+                  {busy ? 'Preparing…' : 'Create world'}
+                </button>
+              </form>
+              <p className="muted">
+                Creating a world starts a separate explorer with fresh
+                progression. Your existing worlds stay saved. Other explorers
+                can visit after reaching orbit. Up to 10 worlds per explorer.
+              </p>
+              {game.current?.readOnly && (
+                <button
+                  className="secondary-button"
+                  onClick={() => void travel(homeId.current)}
+                >
+                  Return to home world
+                </button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </main>
+  );
 }

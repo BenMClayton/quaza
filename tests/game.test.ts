@@ -1,25 +1,198 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Game,wrap,delta,key,SIZE,BUILDS,REFINING,type Item,type Building} from '../lib/game';
-import {validSnapshot} from '../lib/validation';
-function rich(g:Game){for(const i of Object.keys(g.state.inventory) as Item[])g.state.inventory[i]=1000;}
-function machine(type:Building['type'],x:number,y:number,buffer:Building['buffer']={}):Building{return{type,x,y,z:0,progress:0,direction:0,buffer};}
-test('deterministic terrain, mineral variation, and seamless toroidal lookup',()=>{
-  for(const seed of [0,1,2,3,4,731904,2147483647]){const a=new Game(seed),b=new Game(seed);assert.deepEqual(a.tiles,b.tiles);for(const [x,y]of [[0,0],[95,95],[-1,96],[123,-28]]){assert.deepEqual(a.tile(x,y),a.tile(x+SIZE,y-SIZE));}assert.equal(a.tile(42,46).mineral,seed%5);}
-  assert.equal(wrap(-1),95);assert.equal(delta(0,95),1);assert.equal(key(-1,96),'95,0,0');
+import {
+  Game,
+  wrap,
+  delta,
+  key,
+  SIZE,
+  REFINING,
+  type Item,
+  type Building,
+} from '../lib/game';
+import { validSnapshot } from '../lib/validation';
+function rich(g: Game) {
+  for (const i of Object.keys(g.state.inventory) as Item[])
+    g.state.inventory[i] = 1000;
+}
+function machine(
+  type: Building['type'],
+  x: number,
+  y: number,
+  buffer: Building['buffer'] = {},
+): Building {
+  return { type, x, y, z: 0, progress: 0, direction: 0, buffer };
+}
+test('deterministic terrain, mineral variation, and seamless toroidal lookup', () => {
+  for (const seed of [0, 1, 2, 3, 4, 731904, 2147483647]) {
+    const a = new Game(seed),
+      b = new Game(seed);
+    assert.deepEqual(a.tiles, b.tiles);
+    for (const [x, y] of [
+      [0, 0],
+      [95, 95],
+      [-1, 96],
+      [123, -28],
+    ]) {
+      assert.deepEqual(a.tile(x, y), a.tile(x + SIZE, y - SIZE));
+    }
+    assert.equal(a.tile(42, 46).mineral, seed % 5);
+  }
+  assert.equal(wrap(-1), 95);
+  assert.equal(delta(0, 95), 1);
+  assert.equal(key(-1, 96), '95,0,0');
 });
-test('player crosses world seams without a position or camera discontinuity',()=>{const g=new Game();g.state.player.x=95.95;g.state.player.y=48.5;for(const x of [94,95,0,1])for(const y of [47,48,49])g.tiles[0][y*SIZE+x]={type:2,object:'',variant:0,mineral:0};g.keys.add('d');g.keys.add('s');g.step(.1);assert.ok(g.state.player.x<1);assert.ok(Math.abs(delta(g.state.player.x,95.95))<1);});
-test('mining depletes a finite vein and applies inventory and energy cost',()=>{const g=new Game();g.state.player.x=43;g.state.player.y=47;for(let i=0;i<80;i++){g.cooldown=0;g.state.player.stamina=100;g.mine(42,46);}assert.equal(g.state.inventory.ore,80);assert.equal(g.object(42,46),'');g.mine(42,46);assert.equal(g.state.inventory.ore,80);});
-test('construction consumes materials, prevents wall trapping, and recovers 75%',()=>{const g=new Game();const before=g.state.inventory.wood;g.build('floor',48,49);assert.ok(g.building(48,49));assert.equal(g.state.inventory.wood,before-2);g.dismantle(48,49);assert.equal(g.state.inventory.wood,before-1);g.build('wall',48,48);assert.equal(g.building(48,48),undefined);});
-test('all five mineral routes produce iron with their own refining costs',()=>{
-  assert.equal(new Set(REFINING.map(r=>JSON.stringify(r))).size,5);
-  for(let seed=0;seed<5;seed++){const g=new Game(seed);g.state.buildings={};const r=REFINING[seed];const b=machine('furnace',48,48,r.direct?{ore:r.direct,coal:r.fuel}:{concentrate:2,coal:1});g.state.buildings[key(48,48)]=b;g.machines(4);assert.equal(b.buffer.iron,1,`mineral ${seed}`);assert.equal(g.state.stats.smelted,1);
-    const w=machine('washer',46,46,{...r.cost});g.state.buildings[key(46,46)]=w;g.machines(3);assert.equal(w.buffer.concentrate,1);}
+test('player crosses world seams without a position or camera discontinuity', () => {
+  const g = new Game();
+  g.state.player.x = 95.95;
+  g.state.player.y = 48.5;
+  for (const x of [94, 95, 0, 1])
+    for (const y of [47, 48, 49])
+      g.tiles[0][y * SIZE + x] = {
+        type: 2,
+        object: '',
+        variant: 0,
+        mineral: 0,
+      };
+  g.keys.add('d');
+  g.keys.add('s');
+  g.step(0.1);
+  assert.ok(g.state.player.x < 1);
+  assert.ok(Math.abs(delta(g.state.player.x, 95.95)) < 1);
 });
-test('belt transfers are synchronous, bounded and conserve items',()=>{const g=new Game();g.state.buildings={};const a=machine('belt',48,48,{ore:1}),b=machine('belt',49,48),c=machine('chest',50,48);for(const m of [a,b,c])g.state.buildings[key(m.x,m.y)]=m;g.machines(1);assert.equal(a.buffer.ore,0);assert.equal(b.buffer.ore,1);assert.equal(c.buffer.ore,undefined);g.machines(1);assert.equal(c.buffer.ore,1);assert.equal(b.buffer.ore,0);});
-test('assembler consumes inputs and produces research',()=>{const g=new Game();const b=machine('assembler',45,45,{iron:2,copper:2});b.mode='science';g.state.buildings[key(45,45)]=b;g.machines(4);assert.equal(b.buffer.science,1);assert.equal(b.buffer.iron,1);assert.equal(b.buffer.copper,1);});
-test('research and orbital travel require actual prerequisites and 20 hours',()=>{const g=new Game();g.research();assert.equal(g.state.tech,0);rich(g);g.research();assert.equal(g.state.tech,1);g.state.tech=4;g.build('rocket',48,49);assert.equal(g.building(48,49),undefined);g.state.seconds=72000;g.build('rocket',48,49);assert.equal(g.building(48,49)?.type,'rocket');});
-test('pause stops survival, machines and active playtime',()=>{const g=new Game();g.paused=true;const before=JSON.stringify(g.state);g.step(10);assert.equal(JSON.stringify(g.state),before);});
-test('visitors can explore but cannot change inventory, build, mine or progress',()=>{const g=new Game();g.readOnly=true;g.state.player.x=43;g.state.player.y=47;const before=JSON.stringify(g.state.inventory);g.mine(42,46);g.build('floor',43,48);g.craft('coal');g.eat();g.research();g.step(1);assert.equal(g.state.seconds,0);assert.equal(JSON.stringify(g.state.inventory),before);assert.equal(g.building(43,48),undefined);});
-test('save validation rejects corrupt, non-finite, prototype and out-of-range data',()=>{const s=new Game().state;assert.ok(validSnapshot(s));assert.ok(validSnapshot(JSON.parse(JSON.stringify(s))));for(const patch of [{player:{...s.player,x:Infinity}},{inventory:{...s.inventory,wood:-1}},{tech:8},{buildings:{'48,48,0':{...machine('chest',48,48),type:'toString'}}},{removed:{'100,0,0':1}}])assert.equal(validSnapshot({...s,...patch}),false);});
-test('death respawns at camp and charges a bounded inventory loss',()=>{const g=new Game();g.state.player.hp=.001;g.state.player.food=0;g.state.inventory.iron=10;g.step(.1);assert.equal(g.state.player.hp,100);assert.equal(g.state.player.x,48.5);assert.equal(g.state.inventory.iron,8);});
+test('mining depletes a finite vein and applies inventory and energy cost', () => {
+  const g = new Game();
+  g.state.player.x = 43;
+  g.state.player.y = 47;
+  for (let i = 0; i < 80; i++) {
+    g.cooldown = 0;
+    g.state.player.stamina = 100;
+    g.mine(42, 46);
+  }
+  assert.equal(g.state.inventory.ore, 80);
+  assert.equal(g.object(42, 46), '');
+  g.mine(42, 46);
+  assert.equal(g.state.inventory.ore, 80);
+});
+test('construction consumes materials, prevents wall trapping, and recovers 75%', () => {
+  const g = new Game();
+  const before = g.state.inventory.wood;
+  g.build('floor', 48, 49);
+  assert.ok(g.building(48, 49));
+  assert.equal(g.state.inventory.wood, before - 2);
+  g.dismantle(48, 49);
+  assert.equal(g.state.inventory.wood, before - 1);
+  g.build('wall', 48, 48);
+  assert.equal(g.building(48, 48), undefined);
+});
+test('all five mineral routes produce iron with their own refining costs', () => {
+  assert.equal(new Set(REFINING.map((r) => JSON.stringify(r))).size, 5);
+  for (let seed = 0; seed < 5; seed++) {
+    const g = new Game(seed);
+    g.state.buildings = {};
+    const r = REFINING[seed];
+    const b = machine(
+      'furnace',
+      48,
+      48,
+      r.direct ? { ore: r.direct, coal: r.fuel } : { concentrate: 2, coal: 1 },
+    );
+    g.state.buildings[key(48, 48)] = b;
+    g.machines(4);
+    assert.equal(b.buffer.iron, 1, `mineral ${seed}`);
+    assert.equal(g.state.stats.smelted, 1);
+    const w = machine('washer', 46, 46, { ...r.cost });
+    g.state.buildings[key(46, 46)] = w;
+    g.machines(3);
+    assert.equal(w.buffer.concentrate, 1);
+  }
+});
+test('belt transfers are synchronous, bounded and conserve items', () => {
+  const g = new Game();
+  g.state.buildings = {};
+  const a = machine('belt', 48, 48, { ore: 1 }),
+    b = machine('belt', 49, 48),
+    c = machine('chest', 50, 48);
+  for (const m of [a, b, c]) g.state.buildings[key(m.x, m.y)] = m;
+  g.machines(1);
+  assert.equal(a.buffer.ore, 0);
+  assert.equal(b.buffer.ore, 1);
+  assert.equal(c.buffer.ore, undefined);
+  g.machines(1);
+  assert.equal(c.buffer.ore, 1);
+  assert.equal(b.buffer.ore, 0);
+});
+test('assembler consumes inputs and produces research', () => {
+  const g = new Game();
+  const b = machine('assembler', 45, 45, { iron: 2, copper: 2 });
+  b.mode = 'science';
+  g.state.buildings[key(45, 45)] = b;
+  g.machines(4);
+  assert.equal(b.buffer.science, 1);
+  assert.equal(b.buffer.iron, 1);
+  assert.equal(b.buffer.copper, 1);
+});
+test('research and orbital travel require actual prerequisites and 20 hours', () => {
+  const g = new Game();
+  g.research();
+  assert.equal(g.state.tech, 0);
+  rich(g);
+  g.research();
+  assert.equal(g.state.tech, 1);
+  g.state.tech = 4;
+  g.build('rocket', 48, 49);
+  assert.equal(g.building(48, 49), undefined);
+  g.state.seconds = 72000;
+  g.build('rocket', 48, 49);
+  assert.equal(g.building(48, 49)?.type, 'rocket');
+});
+test('pause stops survival, machines and active playtime', () => {
+  const g = new Game();
+  g.paused = true;
+  const before = JSON.stringify(g.state);
+  g.step(10);
+  assert.equal(JSON.stringify(g.state), before);
+});
+test('visitors can explore but cannot change inventory, build, mine or progress', () => {
+  const g = new Game();
+  g.readOnly = true;
+  g.state.player.x = 43;
+  g.state.player.y = 47;
+  const before = JSON.stringify(g.state.inventory);
+  g.mine(42, 46);
+  g.build('floor', 43, 48);
+  g.craft('coal');
+  g.eat();
+  g.research();
+  g.step(1);
+  assert.equal(g.state.seconds, 0);
+  assert.equal(JSON.stringify(g.state.inventory), before);
+  assert.equal(g.building(43, 48), undefined);
+});
+test('save validation rejects corrupt, non-finite, prototype and out-of-range data', () => {
+  const s = new Game().state;
+  assert.ok(validSnapshot(s));
+  assert.ok(validSnapshot(JSON.parse(JSON.stringify(s))));
+  for (const patch of [
+    { player: { ...s.player, x: Infinity } },
+    { inventory: { ...s.inventory, wood: -1 } },
+    { tech: 8 },
+    {
+      buildings: {
+        '48,48,0': { ...machine('chest', 48, 48), type: 'toString' },
+      },
+    },
+    { removed: { '100,0,0': 1 } },
+  ])
+    assert.equal(validSnapshot({ ...s, ...patch }), false);
+});
+test('death respawns at camp and charges a bounded inventory loss', () => {
+  const g = new Game();
+  g.state.player.hp = 0.001;
+  g.state.player.food = 0;
+  g.state.inventory.iron = 10;
+  g.step(0.1);
+  assert.equal(g.state.player.hp, 100);
+  assert.equal(g.state.player.x, 48.5);
+  assert.equal(g.state.inventory.iron, 8);
+});

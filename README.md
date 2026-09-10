@@ -28,10 +28,10 @@ Worlds live in D1, including inventory, player position, depletion, buildings, m
 ## Verification
 
 ```sh
-npx tsc --noEmit
-npx esbuild tests/game.test.ts --bundle --platform=node --format=esm --outfile=outputs/game.test.mjs
-node outputs/game.test.mjs
+npm run typecheck
+npm test
 node tests/api.test.mjs
+npm run lint
 npm run build
 ```
 
@@ -52,3 +52,10 @@ This is a first playable alpha, not a finished massively multiplayer game. World
 The orbital gate enforces a minimum 20 active hours. The current five-era content and economy have not been playtested for a balanced 20-hour campaign. The renderer is written for browser compatibility, but cross-browser UI and frame-rate measurements have not been performed. Performance structures and deterministic tests are in place; large-scale player and factory load testing remains necessary.
 
 Next substantial milestones: authoritative multiplayer regions and player identity; programmable gates, shops and encounter systems; expanded mineral processing and ecology; automated logistics balancing and 20-hour progression playtesting.
+
+## Repository status
+
+The default branch is the reviewable source of truth and continuous integration
+checks formatting-independent lint rules, TypeScript, deterministic game tests,
+and the production build. Generated worker state, local databases, test output,
+and environment files are excluded from version control.
